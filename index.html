@@ -3,48 +3,118 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Mono&display=swap" rel="stylesheet">
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
     <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
     <title>cdr-x | Linktree</title>
     <style>
+      /* Global */
+      :root {
+        --background-color: #1a1a2e;
+        --container-bg: rgba(26, 26, 46, 0.85);
+        --cycle-color: #4b5dfa;
+        --text-color: #e2e8f0;
+        --accent-color: #4b5dfa;
+      }
       body {
         font-family: 'Inter', sans-serif;
         background: #1a1a2e;
         margin: 0;
-        overflow: auto;
-        background-repeat: repeat;
+        overflow: hidden; /* Changed from auto to prevent scrollbars */
+        height: 100vh;
+        position: relative;
+      }
+      #ascii-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+      }
+      /* Zoom wrapper for perfect viewport fit */
+      .zoom-wrapper {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem; /* Minimum padding on small screens */
+        box-sizing: border-box;
+        z-index: 1;
+        transition: transform 0.3s ease-out;
       }
       .container {
-        background: rgba(26, 26, 46, 0.85);
-        --cycle-color: #4b5dfa;
+        background: var(--container-bg);
         border: 1px solid var(--cycle-color);
+        margin-left: auto;
+        margin-right: auto;
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+        max-width: 28rem;
+        width: 100%;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        position: relative;
+        /* Base card height for scaling calculation */
+        min-height: 42rem; /* profile(12rem) + links(6×7rem) + padding(6rem) */
       }
       .container:hover {
         animation: cycleColor 1s infinite;
+      }
+      .profile {
+        text-align: center;
       }
       .profile img {
         --cycle-color: #4b5dfa;
         box-shadow: 0 0 0 2px var(--cycle-color);
         transition: transform 0.3s ease;
+        border-radius: 9999px;
+        width: 8rem;
+        height: 8rem;
+        margin-left: auto;
+        margin-right: auto;
       }
       .profile img:hover {
         animation: cycleColor 1s infinite, pulse 1.5s infinite;
       }
+      .profile h1 {
+        font-size: 1.875rem;
+        font-weight: 700;
+        margin-top: 1rem;
+        color: #ffffff;
+      }
+      .profile p {
+        color: #9ca3af;
+      }
+      .links {
+        margin-top: 2rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
       .links a {
         background: #2b2b4a;
-        color: #e2e8f0;
+        color: var(--text-color);
         --cycle-color: #4b5dfa;
         border: 1px solid var(--cycle-color);
         position: relative;
         overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        transition: transform 0.3s ease;
       }
       .links a:hover {
         background: #4b5dfa;
         color: #ffffff;
         animation: cycleColor 2s infinite;
+        transform: scale(1.05);
       }
       .links a:active::after {
         content: '';
@@ -57,11 +127,16 @@
         transform: translate(-50%, -50%) scale(0);
         animation: glitchRipple 0.5s ease-out;
       }
-      .social-icons ion-icon:hover {
-        color: #4ade80;
-        animation: flickerIcon 0.2s infinite;
+      .links a + a {
+        margin-top: 1rem;
       }
-      /* Added animation classes */
+      .links a ion-icon {
+        font-size: 2rem;
+      }
+      .links a span {
+        margin-left: 0.5rem;
+      }
+      /* Animation classes */
       .bg-cycle {
         animation: cycleBg 0.8s;
       }
@@ -83,43 +158,90 @@
         0%, 100% { opacity: 1; }
         50% { opacity: 0.5; }
       }
+      /* Smooth zoom-in animation on load */
+      .zoom-wrapper.loaded {
+        transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
     </style>
   </head>
   <body>
+    <div id="ascii-bg"></div>
     <pre id="asciiArt" style="display: none;">
 ╔═╦═╦═╦═╗ ╔═╦═╦═╦═╦═╦═╦═╗═══╦═══╦═
-║ ░<>░░ ║ ║ ┌─┼─┐ │   │ │   │     
-║ <>░░  (║░░║)│▒│ │   │ │   │   ◉
+║ ░<>░░ ║ ║ ┌─┼─┐ │ │ │ │
+║ <>░░ (║░░║)│▒│ │ │ │ │ ◉
 ║ ░╔═══╗║ ║ ├═┼═┼═┼═┼═┼═┼═┬═┼═┬═┼═
 ║ ░║ O ║║ ║ └─┼─┘ ║-- ║≈≈≈║~~~║═══
-║ ░╚═══╝║ ║   ║[■]║≈≈≈║~~~║   ║   
-║ ░ ░ ░░ ║║   ║▒▒═╬═▒▒║▒▒═╬═▒▒║   
-║ ░░░<>░░║╚═══╧═══╩═══╧═══╩═══╧═══
+║ ░╚═══╝║ ║ ║[■]║≈≈≈║~~~║ ║
+  ░ ░ ░░ ║║ ║▒▒═╬═▒▒║▒▒═╬═▒▒║
+║ ░░░<>░░║╚═══╧═══—═══╧═══╩═══╧═══
     </pre>
-
-    <div class="container mx-auto py-12 max-w-md rounded-lg shadow-lg relative">
-      <div class="profile text-center">
-        <img src="https://i.imgur.com/3WKYEMA.png" class="rounded-full w-32 h-32 mx-auto ring-2" alt="Profile Picture">
-        <h1 class="text-3xl font-bold mt-4 text-white">cdr-x</h1>
-        <p class="text-gray-400">Connect with me across the web</p>
-      </div>
-      <div class="links mt-8 space-y-4 px-4">
-        <a href="https://github.com/cdr-x" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-4 rounded transform hover:scale-105 transition duration-300">
-          <ion-icon name="logo-github" class="text-2xl"></ion-icon>
-          <span class="ml-2">GitHub</span>
-        </a>
-        <a href="https://open.spotify.com/user/1212791207" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-4 rounded transform hover:scale-105 transition duration-300">
-          <ion-icon name="musical-notes" class="text-2xl"></ion-icon>
-          <span class="ml-2">Spotify</span>
-        </a>
-        <a href="https://steamcommunity.com/id/gollvm" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-4 rounded transform hover:scale-105 transition duration-300">
-          <ion-icon name="logo-steam" class="text-2xl"></ion-icon>
-          <span class="ml-2">Steam</span>
-        </a>
+    
+    <!-- Zoom wrapper for perfect fit -->
+    <div class="zoom-wrapper" id="zoomWrapper">
+      <div class="container">
+        <div class="profile">
+          <img src="https://i.imgur.com/3WKYEMA.png" class="rounded-full w-32 h-32 mx-auto ring-2" alt="Profile Picture">
+          <h1 class="text-3xl font-bold mt-4 text-white">cdr-x</h1>
+          <p class="text-gray-400">Connect with me across the web</p>
+        </div>
+        <div class="links mt-8 space-y-4 px-4">
+          <a href="https://github.com/cdr-x" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-4 rounded transform hover:scale-105 transition duration-300">
+            <ion-icon name="logo-github" class="text-2xl"></ion-icon>
+            <span class="ml-2">GitHub</span>
+          </a>
+          <a href="https://open.spotify.com/user/1212791207" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-4 rounded transform hover:scale-105 transition duration-300">
+            <ion-icon name="musical-notes" class="text-2xl"></ion-icon>
+            <span class="ml-2">Spotify</span>
+          </a>
+          <a href="https://steamcommunity.com/id/gollvm" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-4 rounded transform hover:scale-105 transition duration-300">
+            <ion-icon name="logo-steam" class="text-2xl"></ion-icon>
+            <span class="ml-2">Steam</span>
+          </a>
+        </div>
       </div>
     </div>
+
     <script>
+      // Auto-zoom function to fit card perfectly to viewport height
+      function calculateAndApplyZoom() {
+        const zoomWrapper = document.getElementById('zoomWrapper');
+        const container = document.querySelector('.container');
+        const availableHeight = window.innerHeight - 64; // 2rem padding top/bottom × 2 × 16px = 64px
+        
+        // Measure natural container height
+        const containerStyle = getComputedStyle(container);
+        const containerHeight = container.offsetHeight;
+        
+        // Calculate exact scale needed
+        const scale = Math.min(availableHeight / containerHeight, 1.0); // Never zoom larger than 100%
+        
+        // Apply scale transform
+        zoomWrapper.style.transform = `scale(${scale})`;
+        
+        // Mark as loaded for smooth animation
+        setTimeout(() => {
+          zoomWrapper.classList.add('loaded');
+        }, 100);
+        
+        return scale;
+      }
+
+      // Initialize zoom on load
       window.addEventListener('load', () => {
+        // Apply initial zoom
+        calculateAndApplyZoom();
+        
+        // Re-apply zoom on resize (debounced)
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+          clearTimeout(resizeTimeout);
+          resizeTimeout = setTimeout(() => {
+            calculateAndApplyZoom();
+          }, 150);
+        });
+
+        // ASCII background generation (unchanged)
         const pre = document.getElementById('asciiArt');
         const lines = pre.textContent.split('\n').filter(line => line.trim() !== '');
         const fontSize = 16;
@@ -129,8 +251,7 @@
         const maxChars = Math.max(...lines.map(line => line.length));
         const svgWidth = maxChars * charWidth;
         const svgHeight = numLines * lineHeight;
-
-        let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}"><style>
+        let svgContent = `<style>
           @keyframes glitch1 {
             0%, 100% { transform: translate(0, 0); }
             20% { transform: translate(-2px, 0); }
@@ -139,11 +260,11 @@
             41% { transform: translate(0, 0); }
           }
           @keyframes glitch2 {
-            0%, 100% { fill: #4ade80; }
-            30% { fill: #d92cff; }
-            31% { fill: #4ade80; } 
-            60% { fill: #c28ffd; }
-            61% { fill: #4ade80; }
+            0%, 100% { opacity: 1; }
+            30% { opacity: 0.55; }
+            31% { opacity: 1; }
+            60% { opacity: 0.75; }
+            61% { opacity: 1; }
           }
           @keyframes glitch3 {
             0%, 100% { transform: translate(0, 0); }
@@ -169,13 +290,29 @@
             80% { fill: #ff9ffd; text-shadow: 0 0 5px #ff9ffd; }
             100% { fill: #d92cff; text-shadow: 0 0 5px #d92cff; }
           }
+          @keyframes pulseText {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.01); }
+          }
+          @keyframes colorInversion {
+            0% { filter: invert(0); }
+            50% { filter: invert(1); }
+            100% { filter: invert(0); }
+          }
           .scanline {
             fill: rgba(255, 255, 255, 0.05);
             animation: scanline 6s linear infinite;
           }
+          .interactive-eye.clicked {
+            animation: colorInversion 0.42s infinite;
+          }
+          .easter-egg.clicked text {
+            fill: red;
+            animation: glitch1 0.5s infinite;
+          }
         </style>
         <rect width="100%" height="2" class="scanline" y="-2"/>`;
-
+       
         lines.forEach((line, lineIndex) => {
           [...line].forEach((char, charIndex) => {
             const x = charIndex * charWidth;
@@ -187,7 +324,7 @@
               style += ` text-shadow:0 0 5px #0099FF;`;
             } else if (char === '◉') {
               fillColor = "#d92cff";
-              style += ` animation: purpleCycle 1s infinite;`;
+              style += ` animation: purpleCycle 2s infinite;`;
             } else {
               fillColor = "#4ade80";
               style += ` text-shadow:0 0 5px #4ade80;`;
@@ -198,8 +335,14 @@
                 style += ` animation: ${glitchType} 5s infinite ${delay}s;`;
               }
             }
-            const escapedChar = char.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-            svgContent += `<text x="${x}" y="${y}" font-family="Noto Sans Mono, monospace" font-size="${fontSize}" fill="${fillColor}" style="${style}">${escapedChar}</text>`;
+            const escapedChar = char.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+            if (char === '◉') {
+              svgContent += `<g class="interactive-eye"><text x="${x}" y="${y}" font-family="Noto Sans Mono, monospace" font-size="${fontSize}" fill="${fillColor}" style="${style}">${escapedChar}</text></g>`;
+            } else if (char === 'O') {
+              svgContent += `<g class="easter-egg"><text x="${x}" y="${y}" font-family="Noto Sans Mono, monospace" font-size="${fontSize}" fill="${fillColor}" style="${style}">${escapedChar}</text></g>`;
+            } else {
+              svgContent += `<text x="${x}" y="${y}" font-family="Noto Sans Mono, monospace" font-size="${fontSize}" fill="${fillColor}" style="${style}">${escapedChar}</text>`;
+            }
             if (Math.random() < 0.05) {
               const randomChar1 = String.fromCharCode(33 + Math.floor(Math.random() * 94));
               const randomChar2 = String.fromCharCode(33 + Math.floor(Math.random() * 94));
@@ -210,20 +353,42 @@
             }
           });
         });
-        svgContent += '</svg>';
-
-        const encodedSvg = btoa(unescape(encodeURIComponent(svgContent)));
-        const dataUri = `data:image/svg+xml;base64,${encodedSvg}`;
-
-        // Delay background application by 500ms
+        const asciiBg = document.getElementById('ascii-bg');
+        const cols = Math.ceil(window.innerWidth / svgWidth) + 1;
+        const rows = Math.ceil(window.innerHeight / svgHeight) + 1;
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', svgWidth);
+            svg.setAttribute('height', svgHeight);
+            svg.style.position = 'absolute';
+            svg.style.left = `${j * svgWidth}px`;
+            svg.style.top = `${i * svgHeight}px`;
+            svg.innerHTML = svgContent;
+            asciiBg.appendChild(svg);
+          }
+        }
         setTimeout(() => {
-          document.body.style.backgroundImage = `url('${dataUri}')`;
-          document.body.style.backgroundRepeat = 'repeat';
-          document.body.style.backgroundSize = `${svgWidth}px ${svgHeight}px`;
-          document.body.style.backgroundColor = '#1a1a2e';
           pre.style.display = 'none';
-        }, 500);
+          document.querySelectorAll('.interactive-eye').forEach(el => {
+            el.addEventListener('click', () => {
+              el.classList.add('clicked');
+              setTimeout(() => {
+                el.classList.remove('clicked');
+              }, 2000);
+            });
+          });
+          document.querySelectorAll('.easter-egg').forEach(el => {
+            el.addEventListener('click', () => {
+              el.classList.add('clicked');
+              setTimeout(() => {
+                el.classList.remove('clicked');
+              }, 2000);
+            });
+          });
+        }, 700);
 
+        // Rest of animations (unchanged)
         const colorSequence = [
           "#181818", "#23232a", "#2d2a37", "#45424a", "#7f8a99",
           "#b17435", "#915c23", "#6c3d13", "#d68651", "#a05a2c",
@@ -232,7 +397,6 @@
           "#f8faff", "#ffeefa", "#fffbe2",
           "#a0abb5", "#3d3d3d", "#c59f77", "#372f2d", "#6a6d8c"
         ];
-
         const style = document.createElement('style');
         let colorKeyframes = '';
         colorSequence.forEach((color, index) => {
@@ -240,44 +404,38 @@
           colorKeyframes += `${percent}% { color: ${color}; }`;
         });
         style.textContent = `@keyframes colorCycle { ${colorKeyframes} }`;
-
         let cycleKeyframes = '';
         colorSequence.forEach((color, index) => {
           const percent = (index / (colorSequence.length - 1)) * 100;
           cycleKeyframes += `${percent}% { --cycle-color: ${color}; }`;
         });
         style.textContent += `@keyframes cycleColor { ${cycleKeyframes} }`;
-
         let bgKeyframes = '';
         colorSequence.forEach((color, index) => {
           const percent = (index / (colorSequence.length - 1)) * 100;
           bgKeyframes += `${percent}% { background-color: ${color}; }`;
         });
         style.textContent += `@keyframes cycleBg { ${bgKeyframes} }`;
-
         document.head.appendChild(style);
 
         const links = document.querySelectorAll('.links a');
         links.forEach(link => {
-          // Mouseover: Trigger animations on each event
           link.addEventListener('mouseover', () => {
             link.classList.remove('bg-cycle');
-            void link.offsetWidth; // Force reflow to reset animation
+            void link.offsetWidth;
             link.classList.add('bg-cycle');
             const icon = link.querySelector('ion-icon');
             if (icon) {
               icon.classList.remove('icon-cycle');
-              void icon.offsetWidth; // Force reflow
+              void icon.offsetWidth;
               icon.classList.add('icon-cycle');
             }
           });
-
-          // Mousedown: Quick background animation
           link.addEventListener('mousedown', () => {
             link.classList.add('click-bg');
             setTimeout(() => {
               link.classList.remove('click-bg');
-            }, 200); // Remove after 0.2s
+            }, 200);
           });
         });
       });
