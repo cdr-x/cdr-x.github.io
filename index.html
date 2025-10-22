@@ -26,7 +26,7 @@
         position: relative;
       }
       #ascii-bg {
-        position: fixed;
+        position: absolute;
         top: 0;
         left: 0;
         width: 100%;
@@ -50,6 +50,7 @@
         box-sizing: border-box;
         z-index: 1;
         transition: transform 0.3s ease-out;
+        transform-origin: center;
       }
       .container {
         background: var(--container-bg);
@@ -162,7 +163,6 @@
     </style>
   </head>
   <body>
-    <div id="ascii-bg"></div>
     <pre id="asciiArt" style="display: none;">
 ╔═╦═╦═╦═╗ ╔═╦═╦═╦═╦═╦═╦═╗═══╦═══╦═
 ║ ░<>░░ ║ ║ ┌─┼─┐ │ │ │ │
@@ -175,6 +175,7 @@
     </pre>
     
     <div class="zoom-wrapper" id="zoomWrapper">
+      <div id="ascii-bg"></div>
       <div class="container">
         <div class="profile">
           <img src="https://i.imgur.com/3WKYEMA.png" class="rounded-full w-32 h-32 mx-auto ring-2" alt="Profile Picture">
@@ -199,13 +200,13 @@
     </div>
 
     <script>
-      // Auto-zoom function (unchanged)
+      // Adjusted auto-zoom to fill viewport height (scale can be >1 on large screens)
       function calculateAndApplyZoom() {
         const zoomWrapper = document.getElementById('zoomWrapper');
         const container = document.querySelector('.container');
-        const availableHeight = window.innerHeight - 64;
+        const availableHeight = window.innerHeight - 64; // Account for 2rem padding top/bottom
         const containerHeight = container.offsetHeight;
-        const scale = Math.min(availableHeight / containerHeight, 1.0);
+        const scale = availableHeight / containerHeight; // No min/max - zoom in on large, zoom out on small
         zoomWrapper.style.transform = `scale(${scale})`;
         setTimeout(() => {
           zoomWrapper.classList.add('loaded');
@@ -213,11 +214,11 @@
         return scale;
       }
 
-      // OPTIMIZED ASCII Background - MAX 12 SVGs regardless of screen size
+      // OPTIMIZED ASCII Background - MAX 12 SVGs, now scales with zoom for "zoomed-in" effect
       function createOptimizedAsciiBackground() {
         const pre = document.getElementById('asciiArt');
         const lines = pre.textContent.split('\n').filter(line => line.trim() !== '');
-        const fontSize = 14;  // Slightly smaller for density
+        const fontSize = 14;
         const lineHeight = 16;
         const charWidth = 9;
         const numLines = lines.length;
@@ -225,15 +226,12 @@
         const tileWidth = maxChars * charWidth;
         const tileHeight = numLines * lineHeight;
 
-        // **CRITICAL PERFORMANCE FIX**: Max 3x4 grid = 12 tiles MAX
         const maxCols = 3;
         const maxRows = 4;
         const asciiBg = document.getElementById('ascii-bg');
 
-        // Clear any existing tiles
         asciiBg.innerHTML = '';
 
-        // Generate ONE master SVG content (reused)
         let masterSvgContent = `<style>
           @keyframes glitch1 {0%,100%{transform:translate(0,0);}20%{transform:translate(-1px,0);}21%{transform:translate(0,0);}40%{transform:translate(1px,0);}41%{transform:translate(0,0);}}
           @keyframes glitch2 {0%,100%{opacity:1;}30%{opacity:.6;}31%{opacity:1;}60%{opacity:.8;}61%{opacity:1;}}
@@ -246,7 +244,6 @@
           .egg.clicked text{fill:#ff4444;animation:glitch1 .4s infinite;}
         </style><rect width="100%" height="1" class="scanline" y="-1"/>`;
 
-        // Generate characters ONCE
         lines.forEach((line, lineIndex) => {
           [...line].forEach((char, charIndex) => {
             const x = charIndex * charWidth;
@@ -265,7 +262,7 @@
               return;
             }
 
-            if (Math.random() < 0.1) { // Reduced from 0.15
+            if (Math.random() < 0.1) {
               const glitchType = ['glitch1','glitch2','glitch3'][Math.floor(Math.random()*3)];
               style += `animation:${glitchType} 4s infinite ${Math.random()*3}s;`;
             }
@@ -279,7 +276,6 @@
           });
         });
 
-        // Create MAX 12 tiles with varied positioning
         const positions = [
           {x: 0, y: 0}, {x: -tileWidth/2, y: 0}, {x: tileWidth/2, y: 0},
           {x: 0, y: -tileHeight/2}, {x: -tileWidth/2, y: -tileHeight/2}, {x: tileWidth/2, y: -tileHeight/2},
@@ -305,7 +301,6 @@
           asciiBg.appendChild(svg);
         });
 
-        // Interactive elements (reduced scope)
         setTimeout(() => {
           document.querySelectorAll('.eye, .egg').forEach((el, i) => {
             el.addEventListener('click', () => {
@@ -316,26 +311,20 @@
         }, 300);
       }
 
-      // Load sequence: Zoom first, then background
       window.addEventListener('load', () => {
-        // 1. Apply zoom IMMEDIATELY
         calculateAndApplyZoom();
         
-        // 2. Create optimized background AFTER zoom
         setTimeout(createOptimizedAsciiBackground, 50);
 
-        // 3. Debounced resize
         let resizeTimeout;
         window.addEventListener('resize', () => {
           clearTimeout(resizeTimeout);
           resizeTimeout = setTimeout(() => {
             calculateAndApplyZoom();
-            // Regenerate background on resize (still fast with 12 tiles)
             createOptimizedAsciiBackground();
           }, 200);
         });
 
-        // 4. Link animations (unchanged)
         const colorSequence = ["#181818","#23232a","#2d2a37","#45424a","#7f8a99","#b17435","#915c23","#6c3d13","#d68651","#a05a2c","#ecd4a0","#f1b369","#d92cff","#b03df7","#c28ffd","#7a44aa","#ff9ffd","#f8faff","#ffeefa","#fffbe2","#a0abb5","#3d3d3d","#c59f77","#372f2d","#6a6d8c"];
         const style = document.createElement('style');
         let colorKeyframes = '', cycleKeyframes = '', bgKeyframes = '';
