@@ -47,7 +47,7 @@
         padding: 2rem;
         box-sizing: border-box;
         z-index: 1;
-        transition: transform 0.3s ease-out;
+        transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
         transform-origin: center;
       }
       .container {
@@ -155,9 +155,6 @@
         0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
         100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
       }
-      .zoom-wrapper.loaded {
-        transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-      }
     </style>
   </head>
   <body>
@@ -198,17 +195,25 @@
     </div>
 
     <script>
-      function calculateAndApplyZoom() {
+      // **400% STARTING SCALE CONFIG**
+      const STARTING_SCALE = 4.0;
+      
+      function calculateAndApplyZoom(initialScale = null) {
         const zoomWrapper = document.getElementById('zoomWrapper');
         const container = document.querySelector('.container');
-        const availableHeight = window.innerHeight - 64;
-        const containerHeight = container.offsetHeight;
-        const scale = availableHeight / containerHeight;
-        zoomWrapper.style.transform = `scale(${scale})`;
-        setTimeout(() => {
-          zoomWrapper.classList.add('loaded');
-        }, 100);
-        return scale;
+        
+        if (initialScale !== null) {
+          // START: Apply 400% scale immediately
+          zoomWrapper.style.transform = `scale(${initialScale})`;
+        } else {
+          // LATER: Apply adaptive fit-to-viewport scale
+          const availableHeight = window.innerHeight - 64;
+          const containerHeight = container.offsetHeight;
+          const adaptiveScale = availableHeight / containerHeight;
+          zoomWrapper.style.transform = `scale(${adaptiveScale})`;
+        }
+        
+        return initialScale !== null ? initialScale : (availableHeight / containerHeight);
       }
 
       function createOptimizedAsciiBackground(scale) {
@@ -303,19 +308,29 @@
         }, 300);
       }
 
+      // **TWO-PHASE LOAD SEQUENCE**
       window.addEventListener('load', () => {
-        const scale = calculateAndApplyZoom();
-        createOptimizedAsciiBackground(scale);
+        // PHASE 1: IMMEDIATE 400% SCALE + BACKGROUND
+        const startingScale = calculateAndApplyZoom(STARTING_SCALE);
+        createOptimizedAsciiBackground(startingScale);
 
+        // PHASE 2: SMOOTH TRANSITION TO ADAPTIVE SCALE (after 800ms)
+        setTimeout(() => {
+          const adaptiveScale = calculateAndApplyZoom(); // null = adaptive mode
+          createOptimizedAsciiBackground(adaptiveScale);
+        }, 800);
+
+        // PHASE 3: RESIZE HANDLING (adaptive only)
         let resizeTimeout;
         window.addEventListener('resize', () => {
           clearTimeout(resizeTimeout);
           resizeTimeout = setTimeout(() => {
-            const newScale = calculateAndApplyZoom();
-            createOptimizedAsciiBackground(newScale);
+            const adaptiveScale = calculateAndApplyZoom(); // null = adaptive mode
+            createOptimizedAsciiBackground(adaptiveScale);
           }, 200);
         });
 
+        // Link animations
         const colorSequence = ["#181818","#23232a","#2d2a37","#45424a","#7f8a99","#b17435","#915c23","#6c3d13","#d68651","#a05a2c","#ecd4a0","#f1b369","#d92cff","#b03df7","#c28ffd","#7a44aa","#ff9ffd","#f8faff","#ffeefa","#fffbe2","#a0abb5","#3d3d3d","#c59f77","#372f2d","#6a6d8c"];
         const style = document.createElement('style');
         let colorKeyframes = '', cycleKeyframes = '', bgKeyframes = '';
