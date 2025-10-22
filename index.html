@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Noto Sans Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Mono&display=swap" rel="stylesheet">
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
     <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
     <title>cdr-x | Linktree</title>
@@ -25,9 +25,8 @@
         height: 100vh;
         position: relative;
       }
-      /* Fixed background - doesn't scale with zoom wrapper */
       #ascii-bg {
-        position: fixed;
+        position: absolute;
         top: 0;
         left: 0;
         width: 100%;
@@ -36,7 +35,6 @@
         transform: translateZ(0);
         will-change: transform;
       }
-      /* Zoom wrapper for perfect viewport fit */
       .zoom-wrapper {
         position: fixed;
         top: 0;
@@ -174,9 +172,8 @@
 ║ ░░░<>░░║╚═══╧═══—═══╧═══╩═══╧═══
     </pre>
     
-    <div id="ascii-bg"></div>
-    
     <div class="zoom-wrapper" id="zoomWrapper">
+      <div id="ascii-bg"></div>
       <div class="container">
         <div class="profile">
           <img src="https://i.imgur.com/3WKYEMA.png" class="rounded-full w-32 h-32 mx-auto ring-2" alt="Profile Picture">
@@ -201,7 +198,6 @@
     </div>
 
     <script>
-      // Auto-zoom function - card only (background stays fixed)
       function calculateAndApplyZoom() {
         const zoomWrapper = document.getElementById('zoomWrapper');
         const container = document.querySelector('.container');
@@ -215,8 +211,8 @@
         return scale;
       }
 
-      // FIXED GRID ASCII Background - Grid layout, no rotation
-      function createOptimizedAsciiBackground() {
+      function createOptimizedAsciiBackground(scale) {
+        if (!scale) scale = 1;
         const pre = document.getElementById('asciiArt');
         const lines = pre.textContent.split('\n').filter(line => line.trim() !== '');
         const fontSize = 14;
@@ -224,8 +220,18 @@
         const charWidth = 9;
         const numLines = lines.length;
         const maxChars = Math.max(...lines.map(line => line.length));
-        const tileWidth = maxChars * charWidth;
-        const tileHeight = numLines * lineHeight;
+        const svgWidth = maxChars * charWidth;
+        const svgHeight = numLines * lineHeight;
+
+        const effectiveWidth = window.innerWidth / scale;
+        const effectiveHeight = window.innerHeight / scale;
+        const cols = Math.ceil(effectiveWidth / svgWidth) + 2;
+        const rows = Math.ceil(effectiveHeight / svgHeight) + 2;
+
+        const totalGridWidth = cols * svgWidth;
+        const totalGridHeight = rows * svgHeight;
+        const startLeft = (window.innerWidth / 2) - (totalGridWidth / 2);
+        const startTop = (window.innerHeight / 2) - (totalGridHeight / 2);
 
         const asciiBg = document.getElementById('ascii-bg');
         asciiBg.innerHTML = '';
@@ -234,7 +240,6 @@
           @keyframes glitch1 {0%,100%{transform:translate(0,0);}20%{transform:translate(-1px,0);}21%{transform:translate(0,0);}40%{transform:translate(1px,0);}41%{transform:translate(0,0);}}
           @keyframes glitch2 {0%,100%{opacity:1;}30%{opacity:.6;}31%{opacity:1;}60%{opacity:.8;}61%{opacity:1;}}
           @keyframes glitch3 {0%,100%{transform:translate(0,0);}50%{transform:translate(0,-1px);}51%{transform:translate(0,0);}70%{transform:translate(0,1px);}71%{transform:translate(0,0);}}
-          @keyframes flicker {0%,98%{opacity:0;}98.5%{opacity:1;}100%{opacity:0;}}
           @keyframes scanline {0%{transform:translateY(-100%);}100%{transform:translateY(100%);}}
           @keyframes purpleCycle {0%{fill:#d92cff;}20%{fill:#b03df7;}40%{fill:#c28ffd;}60%{fill:#7a44aa;}80%{fill:#ff9ffd;}100%{fill:#d92cff;}}
           .scanline{fill:rgba(255,255,255,.03);animation:scanline 4s linear infinite;}
@@ -242,17 +247,15 @@
           .egg.clicked text{fill:#ff4444;animation:glitch1 .4s infinite;}
         </style><rect width="100%" height="1" class="scanline" y="-1"/>`;
 
-        // Generate characters ONCE
         lines.forEach((line, lineIndex) => {
           [...line].forEach((char, charIndex) => {
             const x = charIndex * charWidth;
             const y = (lineIndex + 1) * lineHeight - 2;
             let fillColor = "#4ade80";
-            let style = `opacity:.9;font-family:'Noto Sans Mono',monospace;font-size:${fontSize};`;
+            let style = "opacity:.9;font-family:'Noto Sans Mono',monospace;font-size:" + fontSize + ";";
             
             if (char === '(' || char === ')') {
               fillColor = "#0099FF";
-              style += "text-shadow:0 0 3px #0099FF;";
             } else if (char === '◉') {
               fillColor = "#d92cff";
               style += "animation:purpleCycle 3s infinite;";
@@ -261,7 +264,7 @@
               return;
             }
 
-            if (Math.random() < 0.08) { // Slightly reduced
+            if (Math.random() < 0.1) {
               const glitchType = ['glitch1','glitch2','glitch3'][Math.floor(Math.random()*3)];
               style += `animation:${glitchType} 4s infinite ${Math.random()*3}s;`;
             }
@@ -275,31 +278,23 @@
           });
         });
 
-        // **GRID LAYOUT** - 4x3 = 12 tiles, perfectly tiled, NO ROTATION
-        const cols = 4;
-        const rows = 3;
-        for (let row = 0; row < rows; row++) {
-          for (let col = 0; col < cols; col++) {
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('width', tileWidth);
-            svg.setAttribute('height', tileHeight);
-            svg.style.cssText = `
-              position: absolute;
-              left: ${col * tileWidth}px;
-              top: ${row * tileHeight}px;
-              width: ${tileWidth}px;
-              height: ${tileHeight}px;
-              opacity: ${0.65 + Math.random() * 0.3};
-              will-change: transform;
-            `;
+            svg.setAttribute('width', svgWidth);
+            svg.setAttribute('height', svgHeight);
+            svg.style.position = 'absolute';
+            svg.style.left = `${startLeft + j * svgWidth}px`;
+            svg.style.top = `${startTop + i * svgHeight}px`;
+            svg.style.opacity = 0.9;
+            svg.style.willChange = 'transform';
             svg.innerHTML = masterSvgContent;
             asciiBg.appendChild(svg);
           }
         }
 
-        // Interactive elements
         setTimeout(() => {
-          document.querySelectorAll('.eye, .egg').forEach((el, i) => {
+          document.querySelectorAll('.eye, .egg').forEach(el => {
             el.addEventListener('click', () => {
               el.classList.add('clicked');
               setTimeout(() => el.classList.remove('clicked'), 1200);
@@ -309,23 +304,18 @@
       }
 
       window.addEventListener('load', () => {
-        // 1. Create background FIRST (fixed, covers full viewport)
-        createOptimizedAsciiBackground();
-        
-        // 2. THEN apply card zoom (independent of background)
-        setTimeout(calculateAndApplyZoom, 50);
+        const scale = calculateAndApplyZoom();
+        createOptimizedAsciiBackground(scale);
 
-        // 3. Resize handling
         let resizeTimeout;
         window.addEventListener('resize', () => {
           clearTimeout(resizeTimeout);
           resizeTimeout = setTimeout(() => {
-            createOptimizedAsciiBackground();  // Regenerate grid
-            calculateAndApplyZoom();           // Re-apply card scale
+            const newScale = calculateAndApplyZoom();
+            createOptimizedAsciiBackground(newScale);
           }, 200);
         });
 
-        // 4. Animations
         const colorSequence = ["#181818","#23232a","#2d2a37","#45424a","#7f8a99","#b17435","#915c23","#6c3d13","#d68651","#a05a2c","#ecd4a0","#f1b369","#d92cff","#b03df7","#c28ffd","#7a44aa","#ff9ffd","#f8faff","#ffeefa","#fffbe2","#a0abb5","#3d3d3d","#c59f77","#372f2d","#6a6d8c"];
         const style = document.createElement('style');
         let colorKeyframes = '', cycleKeyframes = '', bgKeyframes = '';
