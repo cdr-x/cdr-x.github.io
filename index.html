@@ -86,7 +86,7 @@
     </style>
   </head>
   <body>
-    <pre id="asciiArt" style="display: none;"> 
+    <pre id="asciiArt" style="display: none;">
 ╔═╦═╦═╦═╗ ╔═╦═╦═╦═╦═╦═╦═╗═══╦═══╦═
 ║ ░<>░░ ║ ║ ┌─┼─┐ │   │ │   │     
 ║ <>░░  (║░░║)│▒│ │   │ │   │   ◉
@@ -139,13 +139,12 @@
             41% { transform: translate(0, 0); }
           }
           @keyframes glitch2 {
-            0%, 100% { opacity: 1; }
-            30% { opacity: 0.55; }
-            31% { opacity: 1; }
-            60% { opacity: 0.75; }
-            61% { opacity: 1; }
+            0%, 100% { fill: #4ade80; }
+            30% { fill: #d92cff; }
+            31% { fill: #4ade80; } 
+            60% { fill: #c28ffd; }
+            61% { fill: #4ade80; }
           }
-
           @keyframes glitch3 {
             0%, 100% { transform: translate(0, 0); }
             50% { transform: translate(0, -2px); }
@@ -188,7 +187,7 @@
               style += ` text-shadow:0 0 5px #0099FF;`;
             } else if (char === '◉') {
               fillColor = "#d92cff";
-              style += ` animation: purpleCycle 2s infinite;`;
+              style += ` animation: purpleCycle 1s infinite;`;
             } else {
               fillColor = "#4ade80";
               style += ` text-shadow:0 0 5px #4ade80;`;
