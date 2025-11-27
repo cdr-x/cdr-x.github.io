@@ -247,110 +247,75 @@
             'Enter': Button.Start, 'ShiftRight': Button.Select, 'ShiftLeft': Button.Select
         };
 
-        // WasmNes wrapper with mutex-like protection
+        // WasmNes wrapper - simplified, no audio (to isolate issue)
         class WasmNes {
-            constructor(inst) {
-                this.wasm = inst.exports;
-                this.ptr = this.wasm.wasmnes_new();
-                this.mem = this.wasm.memory;
-                this.locked = false;
-                this.audioBuffer = new Float32Array(4096);
-                this.audioReady = false;
+            constructor(wasm, ptr) {
+                this.wasm = wasm;
+                this.ptr = ptr;
+                this.mem = wasm.memory;
             }
 
             static async create(binary) {
+                let wasmExports = null;
                 const imports = {
                     './nes_rust_wasm_bg.js': {
                         __wbindgen_throw: (ptr, len) => {
-                            throw new Error(new TextDecoder().decode(
-                                new Uint8Array(instance.exports.memory.buffer).subarray(ptr, ptr + len)
-                            ));
+                            if (wasmExports) {
+                                const mem = new Uint8Array(wasmExports.memory.buffer);
+                                throw new Error(new TextDecoder().decode(mem.subarray(ptr, ptr + len)));
+                            }
+                            throw new Error('WASM error at ptr=' + ptr);
                         }
                     }
                 };
+                console.log('Instantiating WASM...');
                 const result = await WebAssembly.instantiate(binary, imports);
-                var instance = result.instance;
-                return new WasmNes(instance);
+                wasmExports = result.instance.exports;
+                console.log('WASM instantiated, creating NES...');
+                const ptr = wasmExports.wasmnes_new();
+                console.log('NES created at ptr:', ptr);
+                return new WasmNes(wasmExports, ptr);
             }
 
             setRom(rom) {
-                if (this.locked) return;
-                this.locked = true;
-                try {
-                    const mem = new Uint8Array(this.mem.buffer);
-                    const p = this.wasm.__wbindgen_malloc(rom.length);
-                    mem.set(rom, p);
-                    this.wasm.wasmnes_set_rom(this.ptr, p, rom.length);
-                } finally {
-                    this.locked = false;
-                }
+                console.log('setRom: allocating', rom.length, 'bytes');
+                const ptr = this.wasm.__wbindgen_malloc(rom.length);
+                console.log('setRom: allocated at', ptr);
+                const mem = new Uint8Array(this.mem.buffer);
+                mem.set(rom, ptr);
+                console.log('setRom: calling wasmnes_set_rom');
+                this.wasm.wasmnes_set_rom(this.ptr, ptr, rom.length);
+                console.log('setRom: done');
+                // Note: Don't free - ROM data needs to persist
             }
 
             bootup() {
-                if (this.locked) return;
+                console.log('bootup: calling wasmnes_bootup');
                 this.wasm.wasmnes_bootup(this.ptr);
+                console.log('bootup: done');
             }
 
             reset() {
-                if (this.locked) return;
                 this.wasm.wasmnes_reset(this.ptr);
             }
 
             stepFrame() {
-                if (this.locked) return;
                 this.wasm.wasmnes_step_frame(this.ptr);
             }
 
-            updatePixels(px) {
-                if (this.locked) return;
-                this.locked = true;
-                try {
-                    const p = this.wasm.__wbindgen_malloc(px.length);
-                    const mem = new Uint8Array(this.mem.buffer);
-                    mem.set(px, p);
-                    this.wasm.wasmnes_update_pixels(this.ptr, p, px.length);
-                    const memAfter = new Uint8Array(this.mem.buffer);
-                    px.set(memAfter.subarray(p, p + px.length));
-                    this.wasm.__wbindgen_free(p, px.length);
-                } finally {
-                    this.locked = false;
-                }
+            updatePixels(pixels) {
+                const ptr = this.wasm.__wbindgen_malloc(pixels.length);
+                const mem = new Uint8Array(this.mem.buffer);
+                mem.set(pixels, ptr);
+                this.wasm.wasmnes_update_pixels(this.ptr, ptr, pixels.length);
+                // Re-read memory (buffer might have grown)
+                const mem2 = new Uint8Array(this.mem.buffer);
+                pixels.set(mem2.subarray(ptr, ptr + pixels.length));
+                this.wasm.__wbindgen_free(ptr, pixels.length);
             }
 
-            // Pre-fetch audio into buffer (called from main thread after stepFrame)
-            fetchAudio() {
-                if (this.locked) return;
-                this.locked = true;
-                try {
-                    const len = this.audioBuffer.length;
-                    const p = this.wasm.__wbindgen_malloc(len * 4);
-                    const mem = new Float32Array(this.mem.buffer);
-                    mem.set(this.audioBuffer, p / 4);
-                    this.wasm.wasmnes_update_sample_buffer(this.ptr, p, len);
-                    const memAfter = new Float32Array(this.mem.buffer);
-                    this.audioBuffer.set(memAfter.subarray(p / 4, p / 4 + len));
-                    this.wasm.__wbindgen_free(p, len * 4);
-                    this.audioReady = true;
-                } finally {
-                    this.locked = false;
-                }
-            }
-
-            // Copy pre-fetched audio to output (safe to call from audio thread)
-            copyAudioTo(buf) {
-                if (this.audioReady) {
-                    buf.set(this.audioBuffer.subarray(0, buf.length));
-                    this.audioReady = false;
-                }
-            }
-
-            press(btn) {
-                if (!this.locked) this.wasm.wasmnes_press_button(this.ptr, btn);
-            }
-
-            release(btn) {
-                if (!this.locked) this.wasm.wasmnes_release_button(this.ptr, btn);
-            }
+            press(btn) { this.wasm.wasmnes_press_button(this.ptr, btn); }
+            release(btn) { this.wasm.wasmnes_release_button(this.ptr, btn); }
         }
 
         // Emulator
@@ -472,26 +437,17 @@
             }
 
             setupAudio() {
-                try {
-                    const AC = window.AudioContext || window.webkitAudioContext;
-                    this.audioCtx = new AC({ sampleRate: 44100 });
-                    const proc = this.audioCtx.createScriptProcessor(4096, 0, 1);
-                    proc.onaudioprocess = (e) => {
-                        if (this.nes && this.running && !this.paused) {
-                            const d = e.outputBuffer.getChannelData(0);
-                            // Use pre-fetched audio buffer (avoids WASM aliasing)
-                            this.nes.copyAudioTo(d);
-                            for (let i = 0; i < d.length; i++) d[i] *= 0.25;
-                        }
-                    };
-                    proc.connect(this.audioCtx.destination);
-                } catch (e) { console.warn('Audio:', e); }
+                // Audio disabled for debugging
+                console.log('Audio disabled for debugging');
             }
 
             start() {
                 if (!this.currentRom) return;
+                console.log('Starting emulator...');
                 this.setupAudio();
+                console.log('Calling bootup...');
                 this.nes.bootup();
+                console.log('Bootup complete');
                 this.running = true;
                 this.paused = false;
                 this.btnStart.textContent = 'Stop';
@@ -517,7 +473,6 @@
                     try {
                         this.nes.stepFrame();
                         this.nes.updatePixels(this.pixels);
-                        this.nes.fetchAudio(); // Pre-fetch audio for async callback
                         this.ctx.putImageData(this.imgData, 0, 0);
                     } catch (e) {
                         this.stop();
