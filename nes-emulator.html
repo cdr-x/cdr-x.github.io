@@ -408,7 +408,19 @@
 // This bypasses parent page CSP restrictions for WebAssembly
 (function() {
     'use strict';
-    
+
+    // Global error handlers to catch uncaught exceptions/rejections
+    window.onerror = function(msg, url, line, col, error) {
+        console.error('[Iframe] Global error:', msg, 'at', line + ':' + col);
+        console.error('[Iframe] Error object:', error);
+        parent.postMessage({type: 'error', msg: 'Uncaught error: ' + msg}, '*');
+        return false;
+    };
+    window.onunhandledrejection = function(event) {
+        console.error('[Iframe] Unhandled rejection:', event.reason);
+        parent.postMessage({type: 'error', msg: 'Unhandled rejection: ' + event.reason}, '*');
+    };
+
     const Button = {
         Poweroff:0, Reset:1, Select:2, Start:3,
         Joypad1A:4, Joypad1B:5, Joypad1Up:6, Joypad1Down:7, Joypad1Left:8, Joypad1Right:9
@@ -437,7 +449,13 @@
     
     function sendFrame() {
         // Send pixel data to parent for rendering
-        parent.postMessage({type: 'frame', pixels: Array.from(pixels)}, '*');
+        // Use slice() to create a copy - more efficient than Array.from for typed arrays
+        try {
+            parent.postMessage({type: 'frame', pixels: Array.prototype.slice.call(pixels)}, '*');
+        } catch (e) {
+            console.error('[Iframe] sendFrame error:', e);
+            throw e;
+        }
     }
     
     class WasmNes {
@@ -493,13 +511,23 @@
     }
     
     let frameCount = 0;
+    let lastFrameTime = 0;
+    let rafFailed = false;
+
     function frame() {
-        if (!running) {
-            console.log('[Iframe] Frame loop stopped: running =', running);
-            return;
-        }
-        if (!paused) {
-            try {
+        // Wrap EVERYTHING in try-catch to catch any possible error
+        try {
+            const now = performance.now();
+            if (frameCount < 10) {
+                console.log('[Iframe] frame() called at', now.toFixed(2), 'ms, delta:', (now - lastFrameTime).toFixed(2), 'ms');
+            }
+            lastFrameTime = now;
+
+            if (!running) {
+                console.log('[Iframe] Frame loop stopped: running =', running);
+                return;
+            }
+            if (!paused) {
                 if (frameCount < 5) console.log('[Iframe] Frame', frameCount + 1, 'stepFrame starting...');
                 nes.stepFrame();
                 if (frameCount < 5) console.log('[Iframe] Frame', frameCount + 1, 'stepFrame done, updatePixels starting...');
@@ -510,15 +538,20 @@
                 if (frameCount <= 5 || frameCount % 60 === 0) {
                     console.log('[Iframe] Frame', frameCount, 'rendered successfully');
                 }
-            } catch (e) {
-                console.error('[Iframe] Frame error at frame', frameCount + 1, ':', e);
-                console.error('[Iframe] Error stack:', e.stack);
-                sendError(e.message || String(e));
-                running = false;
-                return;
             }
+
+            // Schedule next frame
+            if (frameCount < 5) console.log('[Iframe] Scheduling next frame via rAF...');
+            animId = requestAnimationFrame(frame);
+            if (frameCount <= 5) console.log('[Iframe] rAF scheduled, animId:', animId);
+
+        } catch (e) {
+            console.error('[Iframe] Frame error at frame', frameCount + 1, ':', e);
+            console.error('[Iframe] Error stack:', e.stack);
+            console.error('[Iframe] Error name:', e.name, 'message:', e.message);
+            sendError((e.name || 'Error') + ': ' + (e.message || String(e)));
+            running = false;
         }
-        animId = requestAnimationFrame(frame);
     }
     
     // Handle messages from parent
