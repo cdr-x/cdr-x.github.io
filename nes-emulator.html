@@ -247,12 +247,15 @@
             'Enter': Button.Start, 'ShiftRight': Button.Select, 'ShiftLeft': Button.Select
         };
 
-        // WasmNes wrapper
+        // WasmNes wrapper with mutex-like protection
         class WasmNes {
             constructor(inst) {
                 this.wasm = inst.exports;
                 this.ptr = this.wasm.wasmnes_new();
                 this.mem = this.wasm.memory;
+                this.locked = false;
+                this.audioBuffer = new Float32Array(4096);
+                this.audioReady = false;
             }
 
             static async create(binary) {
@@ -270,37 +273,84 @@
                 return new WasmNes(instance);
             }
 
-            u8() { return new Uint8Array(this.mem.buffer); }
-            f32() { return new Float32Array(this.mem.buffer); }
-
             setRom(rom) {
-                const p = this.wasm.__wbindgen_malloc(rom.length);
-                this.u8().set(rom, p);
-                this.wasm.wasmnes_set_rom(this.ptr, p, rom.length);
+                if (this.locked) return;
+                this.locked = true;
+                try {
+                    const mem = new Uint8Array(this.mem.buffer);
+                    const p = this.wasm.__wbindgen_malloc(rom.length);
+                    mem.set(rom, p);
+                    this.wasm.wasmnes_set_rom(this.ptr, p, rom.length);
+                } finally {
+                    this.locked = false;
+                }
             }
 
-            bootup() { this.wasm.wasmnes_bootup(this.ptr); }
-            reset() { this.wasm.wasmnes_reset(this.ptr); }
-            stepFrame() { this.wasm.wasmnes_step_frame(this.ptr); }
+            bootup() {
+                if (this.locked) return;
+                this.wasm.wasmnes_bootup(this.ptr);
+            }
+
+            reset() {
+                if (this.locked) return;
+                this.wasm.wasmnes_reset(this.ptr);
+            }
+
+            stepFrame() {
+                if (this.locked) return;
+                this.wasm.wasmnes_step_frame(this.ptr);
+            }
 
             updatePixels(px) {
-                const p = this.wasm.__wbindgen_malloc(px.length);
-                this.u8().set(px, p);
-                this.wasm.wasmnes_update_pixels(this.ptr, p, px.length);
-                px.set(this.u8().subarray(p, p + px.length));
-                this.wasm.__wbindgen_free(p, px.length);
+                if (this.locked) return;
+                this.locked = true;
+                try {
+                    const p = this.wasm.__wbindgen_malloc(px.length);
+                    const mem = new Uint8Array(this.mem.buffer);
+                    mem.set(px, p);
+                    this.wasm.wasmnes_update_pixels(this.ptr, p, px.length);
+                    const memAfter = new Uint8Array(this.mem.buffer);
+                    px.set(memAfter.subarray(p, p + px.length));
+                    this.wasm.__wbindgen_free(p, px.length);
+                } finally {
+                    this.locked = false;
+                }
             }
 
-            updateAudio(buf) {
-                const p = this.wasm.__wbindgen_malloc(buf.length * 4);
-                this.f32().set(buf, p / 4);
-                this.wasm.wasmnes_update_sample_buffer(this.ptr, p, buf.length);
-                buf.set(this.f32().subarray(p / 4, p / 4 + buf.length));
-                this.wasm.__wbindgen_free(p, buf.length * 4);
+            // Pre-fetch audio into buffer (called from main thread after stepFrame)
+            fetchAudio() {
+                if (this.locked) return;
+                this.locked = true;
+                try {
+                    const len = this.audioBuffer.length;
+                    const p = this.wasm.__wbindgen_malloc(len * 4);
+                    const mem = new Float32Array(this.mem.buffer);
+                    mem.set(this.audioBuffer, p / 4);
+                    this.wasm.wasmnes_update_sample_buffer(this.ptr, p, len);
+                    const memAfter = new Float32Array(this.mem.buffer);
+                    this.audioBuffer.set(memAfter.subarray(p / 4, p / 4 + len));
+                    this.wasm.__wbindgen_free(p, len * 4);
+                    this.audioReady = true;
+                } finally {
+                    this.locked = false;
+                }
             }
 
-            press(btn) { this.wasm.wasmnes_press_button(this.ptr, btn); }
-            release(btn) { this.wasm.wasmnes_release_button(this.ptr, btn); }
+            // Copy pre-fetched audio to output (safe to call from audio thread)
+            copyAudioTo(buf) {
+                if (this.audioReady) {
+                    buf.set(this.audioBuffer.subarray(0, buf.length));
+                    this.audioReady = false;
+                }
+            }
+
+            press(btn) {
+                if (!this.locked) this.wasm.wasmnes_press_button(this.ptr, btn);
+            }
+
+            release(btn) {
+                if (!this.locked) this.wasm.wasmnes_release_button(this.ptr, btn);
+            }
         }
 
         // Emulator
@@ -429,7 +479,8 @@
                     proc.onaudioprocess = (e) => {
                         if (this.nes && this.running && !this.paused) {
                             const d = e.outputBuffer.getChannelData(0);
-                            this.nes.updateAudio(d);
+                            // Use pre-fetched audio buffer (avoids WASM aliasing)
+                            this.nes.copyAudioTo(d);
                             for (let i = 0; i < d.length; i++) d[i] *= 0.25;
                         }
                     };
@@ -466,6 +517,7 @@
                     try {
                         this.nes.stepFrame();
                         this.nes.updatePixels(this.pixels);
+                        this.nes.fetchAudio(); // Pre-fetch audio for async callback
                         this.ctx.putImageData(this.imgData, 0, 0);
                     } catch (e) {
                         this.stop();
