@@ -494,19 +494,26 @@
     
     let frameCount = 0;
     function frame() {
-        if (!running) return;
+        if (!running) {
+            console.log('[Iframe] Frame loop stopped: running =', running);
+            return;
+        }
         if (!paused) {
             try {
+                if (frameCount < 5) console.log('[Iframe] Frame', frameCount + 1, 'stepFrame starting...');
                 nes.stepFrame();
+                if (frameCount < 5) console.log('[Iframe] Frame', frameCount + 1, 'stepFrame done, updatePixels starting...');
                 nes.updatePixels(pixels);
+                if (frameCount < 5) console.log('[Iframe] Frame', frameCount + 1, 'updatePixels done, sendFrame starting...');
                 sendFrame();
                 frameCount++;
-                if (frameCount <= 3 || frameCount % 60 === 0) {
-                    console.log('[Iframe] Frame', frameCount, 'rendered');
+                if (frameCount <= 5 || frameCount % 60 === 0) {
+                    console.log('[Iframe] Frame', frameCount, 'rendered successfully');
                 }
             } catch (e) {
-                console.error('[Iframe] Frame error:', e);
-                sendError(e.message);
+                console.error('[Iframe] Frame error at frame', frameCount + 1, ':', e);
+                console.error('[Iframe] Error stack:', e.stack);
+                sendError(e.message || String(e));
                 running = false;
                 return;
             }
