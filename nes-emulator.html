@@ -510,6 +510,24 @@
                 roms.set('cdr-x-demo.nes', demoRom);
                 updateRomList();
 
+                // Try to auto-load Galaga.nes on startup
+                try {
+                    setStatus('Loading Galaga.nes...', 'loading');
+                    const response = await fetch('Galaga.nes');
+                    if (response.ok) {
+                        const romData = new Uint8Array(await response.arrayBuffer());
+                        console.log('Galaga.nes loaded, size:', romData.length);
+                        roms.set('Galaga.nes', romData);
+                        updateRomList();
+                        selectRom('Galaga.nes');
+                        // Auto-start the emulator
+                        btnStart.click();
+                        return;
+                    }
+                } catch (fetchErr) {
+                    console.log('Galaga.nes not found, using demo ROM');
+                }
+
                 setStatus('Ready! Select a ROM.', 'ready');
             } catch (e) {
                 console.error('WASM init failed:', e);
