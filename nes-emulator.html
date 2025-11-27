@@ -493,27 +493,41 @@
         
         switch (msg.type) {
             case 'rom':
-                if (nes) {
-                    try {
-                        nes.setRom(new Uint8Array(msg.data));
-                        parent.postMessage({type: 'romLoaded'}, '*');
-                    } catch (err) {
-                        sendError(err.message);
+                if (!nes) {
+                    sendError('Emulator not ready - please wait for WASM to load');
+                    break;
+                }
+                if (!msg.data || !msg.data.length) {
+                    sendError('No ROM data received');
+                    break;
+                }
+                try {
+                    const romData = new Uint8Array(msg.data);
+                    // Validate NES ROM header (starts with "NES\x1A")
+                    if (romData.length < 16 || romData[0] !== 0x4E || romData[1] !== 0x45 || romData[2] !== 0x53 || romData[3] !== 0x1A) {
+                        sendError('Invalid NES ROM format - missing iNES header');
+                        break;
                     }
+                    nes.setRom(romData);
+                    parent.postMessage({type: 'romLoaded'}, '*');
+                } catch (err) {
+                    sendError('ROM load failed: ' + err.message);
                 }
                 break;
                 
             case 'start':
-                if (nes) {
-                    running = true;
-                    paused = false;
-                    try {
-                        nes.bootup();
-                        frame();
-                    } catch (err) {
-                        sendError(err.message);
-                        running = false;
-                    }
+                if (!nes) {
+                    sendError('Emulator not initialized');
+                    break;
+                }
+                running = true;
+                paused = false;
+                try {
+                    nes.bootup();
+                    frame();
+                } catch (err) {
+                    sendError('Failed to start: ' + err.message);
+                    running = false;
                 }
                 break;
                 
