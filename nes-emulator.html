@@ -429,7 +429,6 @@
     let nes = null;
     let running = false;
     let paused = false;
-    let animId = null;
     const pixels = new Uint8Array(256 * 240 * 4);
     
     function b64ToBuffer(b64) {
@@ -512,24 +511,6 @@
     
     let frameCount = 0;
     let lastFrameTime = 0;
-    let rafFailed = false;
-    let lastFrameCount = -1;
-    let watchdogTimer = null;
-
-    // Watchdog to detect if rAF silently fails
-    function startWatchdog() {
-        if (watchdogTimer) clearTimeout(watchdogTimer);
-        watchdogTimer = setTimeout(function() {
-            if (running && !paused && frameCount === lastFrameCount) {
-                console.warn('[Iframe] WATCHDOG: Frame loop stalled! frameCount:', frameCount);
-                console.warn('[Iframe] WATCHDOG: rAF appears to not be calling back. Using setTimeout fallback.');
-                rafFailed = true;
-                frame(); // Force continue
-            }
-            lastFrameCount = frameCount;
-            if (running) startWatchdog();
-        }, 100); // Check every 100ms
-    }
 
     function frame() {
         // Wrap EVERYTHING in try-catch to catch any possible error
@@ -557,22 +538,12 @@
                 }
             }
 
-            // Schedule next frame - ALWAYS log this to debug
-            console.log('[Iframe] After frame', frameCount, '- scheduling next (rafFailed:', rafFailed, ')');
-
-            if (rafFailed) {
-                // Use setTimeout fallback
-                setTimeout(frame, 16);
-            } else {
-                try {
-                    animId = requestAnimationFrame(frame);
-                    console.log('[Iframe] rAF returned animId:', animId);
-                } catch (rafError) {
-                    console.error('[Iframe] rAF failed:', rafError);
-                    rafFailed = true;
-                    setTimeout(frame, 16);
-                }
+            // Schedule next frame using setTimeout - rAF is unreliable in sandboxed iframes
+            // Some browsers throttle/stop rAF in opaque origin contexts
+            if (frameCount <= 5) {
+                console.log('[Iframe] After frame', frameCount, '- scheduling next via setTimeout');
             }
+            setTimeout(frame, 16);
 
         } catch (e) {
             console.error('[Iframe] Frame error at frame', frameCount + 1, ':', e);
@@ -664,7 +635,6 @@
                     console.log('[Iframe] Calling bootup...');
                     nes.bootup();
                     console.log('[Iframe] Bootup complete, starting frame loop');
-                    startWatchdog(); // Detect if rAF stops working
                     frame();
                 } catch (err) {
                     console.error('[Iframe] Start error:', err);
@@ -675,7 +645,6 @@
                 
             case 'stop':
                 running = false;
-                if (animId) cancelAnimationFrame(animId);
                 break;
                 
             case 'pause':
