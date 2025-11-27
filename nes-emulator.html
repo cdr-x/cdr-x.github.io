@@ -494,19 +494,26 @@
     
     let frameCount = 0;
     function frame() {
-        if (!running) return;
+        if (!running) {
+            console.log('[Iframe] Frame loop stopped: running =', running);
+            return;
+        }
         if (!paused) {
             try {
+                if (frameCount < 5) console.log('[Iframe] Frame', frameCount + 1, 'stepFrame starting...');
                 nes.stepFrame();
+                if (frameCount < 5) console.log('[Iframe] Frame', frameCount + 1, 'stepFrame done, updatePixels starting...');
                 nes.updatePixels(pixels);
+                if (frameCount < 5) console.log('[Iframe] Frame', frameCount + 1, 'updatePixels done, sendFrame starting...');
                 sendFrame();
                 frameCount++;
-                if (frameCount <= 3 || frameCount % 60 === 0) {
-                    console.log('[Iframe] Frame', frameCount, 'rendered');
+                if (frameCount <= 5 || frameCount % 60 === 0) {
+                    console.log('[Iframe] Frame', frameCount, 'rendered successfully');
                 }
             } catch (e) {
-                console.error('[Iframe] Frame error:', e);
-                sendError(e.message);
+                console.error('[Iframe] Frame error at frame', frameCount + 1, ':', e);
+                console.error('[Iframe] Error stack:', e.stack);
+                sendError(e.message || String(e));
                 running = false;
                 return;
             }
@@ -535,13 +542,44 @@
                 }
                 try {
                     const romData = new Uint8Array(msg.data);
-                    console.log('[Iframe] ROM size:', romData.length, 'header:', Array.from(romData.slice(0,4)));
+                    console.log('[Iframe] ROM size:', romData.length, 'header:', Array.from(romData.slice(0,16)).map(b => b.toString(16).padStart(2,'0')).join(' '));
                     // Validate NES ROM header (starts with "NES\x1A")
                     if (romData.length < 16 || romData[0] !== 0x4E || romData[1] !== 0x45 || romData[2] !== 0x53 || romData[3] !== 0x1A) {
                         console.error('[Iframe] Invalid iNES header');
                         sendError('Invalid NES ROM format - missing iNES header');
                         break;
                     }
+
+                    // Clean corrupted ROM headers (e.g., "DiskDude!" signature)
+                    // Check if bytes 7-15 contain non-zero garbage (iNES 1.0 should have zeros)
+                    // Detect NES 2.0 format by checking byte 7 bits 2-3 == 0b10
+                    const isNes2 = (romData[7] & 0x0C) === 0x08;
+                    if (!isNes2) {
+                        // Check for garbage in bytes 7-15 (common with old ROM dumps)
+                        let hasGarbage = false;
+                        for (let i = 7; i < 16; i++) {
+                            // In iNES 1.0, bytes 8-15 should be zero, byte 7 upper nibble is mapper
+                            if (i >= 8 && romData[i] !== 0) {
+                                hasGarbage = true;
+                                break;
+                            }
+                        }
+                        if (hasGarbage) {
+                            console.log('[Iframe] Detected corrupted header (DiskDude! or similar), cleaning bytes 7-15');
+                            // Zero out bytes 7-15 to fix mapper detection
+                            // Keep byte 7 lower nibble (VS/PlayChoice flags) but clear rest
+                            romData[7] = romData[7] & 0x0F; // Keep only lower nibble
+                            for (let i = 8; i < 16; i++) {
+                                romData[i] = 0;
+                            }
+                            console.log('[Iframe] Cleaned header:', Array.from(romData.slice(0,16)).map(b => b.toString(16).padStart(2,'0')).join(' '));
+                        }
+                    }
+
+                    // Log mapper info for debugging
+                    const mapper = ((romData[6] >> 4) & 0x0F) | (romData[7] & 0xF0);
+                    console.log('[Iframe] Mapper:', mapper, 'PRG banks:', romData[4], 'CHR banks:', romData[5]);
+
                     console.log('[Iframe] Calling nes.setRom...');
                     nes.setRom(romData);
                     console.log('[Iframe] ROM set successfully');
