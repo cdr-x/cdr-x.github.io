@@ -513,16 +513,25 @@
                 roms.set('cdr-x-demo.nes', demoRom);
                 updateRomList();
 
-                // Auto-load Galaga if embedded
-                if (GALAGA_B64) {
-                    const galagaRom = new Uint8Array(b64ToBuffer(GALAGA_B64));
-                    console.log('Galaga ROM loaded from embedded data, size:', galagaRom.length);
-                    roms.set('Galaga.nes', galagaRom);
-                    updateRomList();
-                    selectRom('Galaga.nes');
-                    // Auto-start the emulator
-                    btnStart.click();
-                    return;
+                // Fetch and load Galaga.nes from the same directory
+                try {
+                    setStatus('Loading Galaga.nes...', 'loading');
+                    const response = await fetch('Galaga.nes');
+                    if (response.ok) {
+                        const arrayBuffer = await response.arrayBuffer();
+                        const galagaRom = new Uint8Array(arrayBuffer);
+                        console.log('Galaga ROM loaded from file, size:', galagaRom.length);
+                        roms.set('Galaga.nes', galagaRom);
+                        updateRomList();
+                        selectRom('Galaga.nes');
+                        // Auto-start the emulator
+                        btnStart.click();
+                        return;
+                    } else {
+                        console.warn('Galaga.nes not found, status:', response.status);
+                    }
+                } catch (fetchError) {
+                    console.warn('Could not fetch Galaga.nes:', fetchError);
                 }
 
                 setStatus('Ready! Select a ROM.', 'ready');
