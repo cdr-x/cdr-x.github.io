@@ -540,10 +540,18 @@
                 }
             }
 
-            // Schedule next frame
-            if (frameCount < 5) console.log('[Iframe] Scheduling next frame via rAF...');
-            animId = requestAnimationFrame(frame);
-            if (frameCount <= 5) console.log('[Iframe] rAF scheduled, animId:', animId);
+            // Schedule next frame - ALWAYS log this to debug
+            console.log('[Iframe] After frame', frameCount, '- about to schedule next frame');
+
+            try {
+                animId = requestAnimationFrame(frame);
+                console.log('[Iframe] rAF returned animId:', animId);
+            } catch (rafError) {
+                console.error('[Iframe] rAF failed:', rafError);
+                // Fallback to setTimeout if rAF fails
+                console.log('[Iframe] Falling back to setTimeout');
+                setTimeout(frame, 16);
+            }
 
         } catch (e) {
             console.error('[Iframe] Frame error at frame', frameCount + 1, ':', e);
